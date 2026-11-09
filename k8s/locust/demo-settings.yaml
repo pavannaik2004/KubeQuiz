@@ -7,6 +7,6 @@ metadata:
   labels: {app.kubernetes.io/name: locust}
 data:
   LOCUST_HOST: http://quiz-app.kubequiz.svc.cluster.local
-  LOCUST_USERS: "300"
+  LOCUST_USERS: "200"
   LOCUST_SPAWN_RATE: "10"
   LOCUST_RUN_TIME: 5m

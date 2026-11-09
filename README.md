@@ -142,9 +142,9 @@ bash scripts/run-playbook.sh scale-demo.yml
 bash scripts/run-playbook.sh scale-demo.yml -e demo_users=500 -e demo_duration=8m
 ```
 What happens:
-1. The playbook writes the load profile (default **300 simulated students, +10/s, 5 minutes**) and starts the headless Locust Job.
+1. The playbook writes the load profile (default **200 simulated students, +10/s, 5 minutes**) and starts the headless Locust Job.
 2. Each simulated student logs in, opens random quizzes, answers, submits, and checks the leaderboard.
-3. Pod CPU rises above 50% of the 100m request, and the **HPA adds pods** (up to +4 per 15 s, max 10). The playbook waits until at least 5 replicas are running.
+3. Pod CPU rises above 50% of the 200m request, and the **HPA adds pods** (up to +4 per 15 s, max 10). The playbook waits until at least 5 replicas are running. As measured, one request costs about 3.6 millicores of CPU, so expect roughly **one pod per 30 simulated students**: about 7 pods for 200 users, and the 10-pod cap from about 300.
 4. The playbook prints the Locust summary (requests, failures, latency).
 5. When the load stops, the HPA **scales back to 3** after a 60 s stabilization window.
 
@@ -196,7 +196,7 @@ The tests cover scoring, the full quiz flow, late submission, **statelessness** 
 - **Probes:** a `startupProbe` and `livenessProbe` on `/healthz`, plus a `readinessProbe` on `/readyz`. A pod whose DB is unreachable is taken out of the Service without being restarted.
 - **Zero-downtime updates:** `maxUnavailable: 0`, `maxSurge: 1`, a `preStop` sleep and gunicorn's graceful timeout.
 - **Hardening:** runs as non-root UID 10001, read-only root filesystem, all capabilities dropped, no privilege escalation; secrets come only from a Secret.
-- **Resource requests** (cpu 100m / mem 128Mi) are what the HPA's CPU percentage is calculated against.
+- **Resource requests** (cpu 200m / mem 128Mi) are what the HPA's CPU percentage is calculated against.
 
 ## Troubleshooting
 

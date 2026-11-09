@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** All code written: M7 CI and M8 README done. The live-cluster verification of M3 to M6 is **still blocked on the user** running the WSL bootstrap. The CI e2e job will also verify the manifests once the repo is pushed to GitHub.
-- **Last updated:** 2026-11-09 10:13 +05:30
+- **Last updated:** 2026-11-09 10:20 +05:30
 - **Next up:** (1) The user runs `bash scripts/wsl-bootstrap.sh` in WSL. (2) Run `site.yml` twice (deploy, then the idempotency check). (3) Run `scale-demo.yml` and tune the HPA/CPU if scaling is weak. (4) The user creates a GitHub repo and pushes, and CI goes green. (5) Screenshots for the report.
 
 ## Milestones
@@ -85,3 +85,9 @@ Newest entries go at the bottom. Format: `### YYYY-MM-DD HH:MM | <milestone> | <
 - `README.md`: requirement mapping, mermaid architecture, features, layout, compose quick start, the WSL + Ansible deploy, what each role does, the scaling demo script, teardown, testing/CI, design notes, troubleshooting, limitations, screenshot checklist.
 - Verified: actionlint clean (after quoting `${APP_VERSION}`), shellcheck clean, pytest still 22 passed.
 - **Blocked:** a local run of the e2e script on a temporary kind cluster was **denied by the auto-mode classifier** ("Code from External": downloading and running `kind.exe`). It was not worked around. The e2e script has therefore **not been executed yet**; it will run in CI on push, or locally if the user approves kind.
+
+### 2026-11-09 10:20 | M5 (pre-tuning) | Measured CPU per request, retuned HPA inputs
+- Checked first: the WSL bootstrap had still not been run, and there is no git remote.
+- docker compose + Locust: 100 users for 60 s gave **5646 requests, 0 failures, 94.7 req/s, median 6 ms, avg 12 ms**. Container CPU sampled with `docker stats`: steady average **~34% of a core (~340m)**, so about **3.6m CPU per request**.
+- Conclusion: at 100m/50%, 300 users would want about 20 pods and pin at the max of 10. Changed (D-032): pod CPU request **200m**, demo default **200 users** (expect about 7 pods). Updated `k8s/deployment.yaml`, `hpa.yaml` comment, `locust/demo-settings.yaml`, `group_vars`, the dashboard panel title, README, PRD N3 and success criteria (baseline 3, not 2), and D-011.
+- Still to confirm on live minikube (M5).

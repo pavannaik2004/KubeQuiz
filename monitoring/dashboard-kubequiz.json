@@ -64,7 +64,7 @@
           {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [6, 6]}}, {"id": "color", "value": {"mode": "fixed", "fixedColor": "gray"}}]}]}
     },
     {
-      "id": 7, "type": "timeseries", "title": "CPU per pod (% of 100m request)",
+      "id": 7, "type": "timeseries", "title": "CPU per pod (% of 200m request)",
       "gridPos": {"x": 12, "y": 5, "w": 12, "h": 9},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [{"refId": "A", "legendFormat": "{{pod}}", "expr": "100 * sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"kubequiz\", container=\"app\"}[1m])) / on (pod) sum by (pod) (kube_pod_container_resource_requests{namespace=\"kubequiz\", container=\"app\", resource=\"cpu\"})"}],

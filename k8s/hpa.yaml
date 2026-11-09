@@ -1,5 +1,5 @@
 # Scale quiz-app between 3 and 10 replicas to keep average CPU near 50% of
-# the pods' request (100m). metrics-server provides the CPU numbers.
+# the pods' request (200m). metrics-server provides the CPU numbers.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

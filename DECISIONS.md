@@ -68,7 +68,7 @@ Status: Active.
 Status: Active.
 
 ### D-011 | 2026-11-09 | Kubernetes
-**HPA: minimum 3, maximum 10 replicas, 50% CPU target, scale-up immediately (+100% or +4 pods per 15s), 60s scale-down stabilization. Pods request cpu=100m, mem=128Mi. The Deployment has no `replicas:` field; the HPA owns it.**
+**HPA: minimum 3, maximum 10 replicas, 50% CPU target, scale-up immediately (+100% or +4 pods per 15s), 60s scale-down stabilization. Pods request cpu=200m (was 100m, see D-032), mem=128Mi. The Deployment has no `replicas:` field; the HPA owns it.**
 *Why:* 3 replicas is the "multiple replicas" baseline. A fixed `replicas` in the Deployment would be reset on every `apply` and fight the HPA. The short stabilization window lets the demo show the scale-down within minutes; the default is 5 minutes.
 Status: Active (revised 2026-11-09: min was 2; may be tuned in M5).
 
@@ -163,6 +163,11 @@ Status: Active.
 ### D-031 | 2026-11-09 | Testing
 **The e2e smoke test is one script (`scripts/e2e-smoke.sh`), used by CI and runnable by hand on any fresh cluster.** It applies the plain `k8s/` files with kubectl, not Ansible, so it tests the manifests independently of the automation.
 Status: Active.
+
+### D-032 | 2026-11-09 | Autoscaling tuning
+**The pod CPU request was raised from 100m to 200m, keeping the 50% HPA target. The default demo load went from 300 to 200 simulated users.**
+*Why (measured):* a docker-compose run with 100 Locust users gave **94.7 req/s at about 340m CPU (about 3.6m per request)** with 0 failures. At 100m/50%, one pod saturates at about 14 req/s, so even 50 users would ask for 4 pods and 300 users for about 20, pinning the demo at the 10-pod cap. At 200m/50% it is about 1 pod per 30 users: 200 users gives about 7 pods, showing replicas tracking the load. Capacity check: 10 × 200m = 2 cores, which fits in minikube's 4 CPUs after the control plane (~0.85), monitoring (~0.22) and Locust (~0.45) requests.
+Status: Active (re-check against the live minikube numbers in M5).
 
 ### D-029 | 2026-11-09 | Deploy
 **Ansible applies the plain files in `k8s/` (`kubernetes.core.k8s src:`), except the Secret, which it builds from group_vars. `k8s/secret.example.yaml` is only for manual `kubectl` use.**

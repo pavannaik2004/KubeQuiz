@@ -51,8 +51,10 @@ spec:
                   fieldPath: metadata.name
           resources:
             # The HPA computes CPU utilisation relative to this request.
+            # Measured ~3.6m CPU per request, so 200m @ 50% target is ~1 pod
+            # per ~30 simulated students (D-032).
             requests:
-              cpu: 100m
+              cpu: 200m
               memory: 128Mi
             limits:
               cpu: 500m

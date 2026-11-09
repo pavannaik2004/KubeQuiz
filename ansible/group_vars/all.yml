@@ -38,7 +38,7 @@ kps_chart_version: "93.1.0"          # prometheus-community/kube-prometheus-stac
 grafana_admin_password: admin
 
 # ---- scale demo (scale-demo.yml) -------------------------------------------------
-demo_users: 300
+demo_users: 200                       # ~1 pod per 30 users at 200m/50% (D-032)
 demo_spawn_rate: 10
 demo_duration: 5m
 demo_expect_replicas: 5               # playbook waits until the HPA reaches this

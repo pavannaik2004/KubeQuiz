@@ -73,7 +73,7 @@ In an online exam, many students tend to log in at the same moment, for example 
 |----|-------------|
 | N1 | Stateless pods: any replica can serve any request, because sessions are signed cookies shared via SECRET_KEY |
 | N2 | No downtime when a pod is killed (at least 2 replicas at all times, readiness gating) |
-| N3 | Under about 300 simulated users, the HPA scales up within about 2 minutes and the error rate stays under 1% |
+| N3 | Under about 200 simulated users, the HPA scales up within about 2 minutes and the error rate stays under 1% |
 | N4 | A full deployment from a clean WSL install finishes with one bootstrap script plus one playbook |
 | N5 | Secrets are never baked into the image; they are injected through a Kubernetes Secret |
 
@@ -89,8 +89,8 @@ The full design is in the README.
 1. `ansible-playbook site.yml` runs green twice; the second run changes nothing in the deploy role.
 2. `kubectl get pods` shows 3 healthy replicas, and refreshing the page shows different pod names.
 3. Deleting a pod causes no user-visible outage, and Kubernetes recreates it.
-4. A Locust ramp to 300 users scales replicas from 2 to at least 6, and this shows in `kubectl get hpa -w` and in Grafana.
-5. When the load stops, replicas return to 2.
+4. A Locust ramp to 200 users scales replicas from 3 to at least 5 (about 7 expected), and this shows in `kubectl get hpa -w` and in Grafana.
+5. When the load stops, replicas return to 3.
 6. CI is green on GitHub.
 
 ## 9. Milestones
