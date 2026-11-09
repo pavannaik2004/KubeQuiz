@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ quiz.title }} · KubeQuiz{% endblock %}
+{% block content %}
+<div class="quiz-head">
+  <h1>{{ quiz.title }}</h1>
+  <div class="timer" id="timer" data-seconds="{{ quiz.time_limit_seconds }}" aria-live="polite">
+    --:--
+  </div>
+</div>
+
+<form id="quiz-form" method="post" action="{{ url_for('quiz.submit', quiz_id=quiz.id) }}">
+  {% for q in questions %}
+  <fieldset class="card question">
+    <legend><span class="qnum">{{ loop.index }}</span> {{ q.text }}</legend>
+    {% for opt in q.options %}
+    <label class="option">
+      <input type="radio" name="q{{ q.id }}" value="{{ loop.index0 }}">
+      <span>{{ opt }}</span>
+    </label>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+  <button class="btn btn-lg" type="submit">Submit answers</button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='timer.js') }}"></script>
+{% endblock %}

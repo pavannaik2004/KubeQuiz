@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ quiz.title }} · KubeQuiz{% endblock %}
+{% block content %}
+<p><a class="link" href="{{ url_for('admin.dashboard') }}">← Admin</a></p>
+
+<form class="card" method="post" action="{{ url_for('admin.update_quiz', quiz_id=quiz.id) }}">
+  <h1>Edit quiz</h1>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label for="title">Title</label>
+  <input id="title" name="title" value="{{ quiz.title }}" required maxlength="120">
+  <label for="description">Description</label>
+  <input id="description" name="description" value="{{ quiz.description }}" maxlength="300">
+  <label for="time_limit_seconds">Time limit (seconds)</label>
+  <input id="time_limit_seconds" name="time_limit_seconds" type="number" min="30" max="7200"
+         value="{{ quiz.time_limit_seconds }}" required>
+  <button class="btn">Save</button>
+</form>
+
+<h2>Questions ({{ questions | length }})</h2>
+{% for q in questions %}
+<div class="card review">
+  <div class="quiz-head">
+    <p><strong>{{ loop.index }}.</strong> {{ q.text }}</p>
+    <form method="post" action="{{ url_for('admin.delete_question', question_id=q.id) }}" class="inline"
+          onsubmit="return confirm('Delete this question?')">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="link danger">Delete</button>
+    </form>
+  </div>
+  <ul>
+    {% for opt in q.options %}
+    <li class="{{ 'is-correct' if loop.index0 == q.correct_index }}">{{ opt }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+
+<form class="card" method="post" action="{{ url_for('admin.add_question', quiz_id=quiz.id) }}">
+  <h2>Add question</h2>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label for="text">Question</label>
+  <input id="text" name="text" required>
+  <p class="muted">Fill in 2 to 6 options and select the correct one.</p>
+  {% for i in range(4) %}
+  <div class="row option-row">
+    <input type="radio" name="correct" value="{{ i }}" {{ 'checked' if i == 0 }} aria-label="Option {{ i + 1 }} is correct">
+    <input name="option" placeholder="Option {{ i + 1 }}" {{ 'required' if i < 2 }}>
+  </div>
+  {% endfor %}
+  <button class="btn">Add question</button>
+</form>
+
+<form class="card danger-zone" method="post" action="{{ url_for('admin.delete_quiz', quiz_id=quiz.id) }}"
+      onsubmit="return confirm('Delete this quiz and all its attempts?')">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <button class="btn btn-danger">Delete quiz</button>
+</form>
+{% endblock %}

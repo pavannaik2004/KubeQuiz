@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Online exams that scale with the crowd</h1>
+  <p class="muted">Pick a quiz, beat the clock, climb the leaderboard.</p>
+</section>
+
+{% if not username %}
+<form class="card name-form" method="post" action="{{ url_for('quiz.login') }}">
+  <label for="username">Your name</label>
+  <div class="row">
+    <input id="username" name="username" required minlength="2" maxlength="32"
+           placeholder="e.g. Asha" autocomplete="nickname">
+    <button class="btn">Continue</button>
+  </div>
+</form>
+{% endif %}
+
+<section class="grid">
+  {% for q in quizzes %}
+  <article class="card quiz-card">
+    <h2>{{ q.title }}</h2>
+    <p class="muted">{{ q.description }}</p>
+    <p class="meta">{{ q.question_count }} questions · {{ (q.time_limit_seconds // 60) }} min {{ q.time_limit_seconds % 60 }} s</p>
+    <div class="actions">
+      {% if username and q.question_count %}
+        <a class="btn" href="{{ url_for('quiz.take', quiz_id=q.id) }}">Start</a>
+      {% else %}
+        <span class="btn disabled">{{ 'Enter your name' if not username else 'No questions yet' }}</span>
+      {% endif %}
+      <a class="link" href="{{ url_for('quiz.leaderboard', quiz_id=q.id) }}">Leaderboard</a>
+    </div>
+  </article>
+  {% else %}
+  <p class="muted">No quizzes yet. An admin can add some.</p>
+  {% endfor %}
+</section>
+{% endblock %}

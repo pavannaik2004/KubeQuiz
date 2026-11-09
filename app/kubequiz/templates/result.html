@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Result · KubeQuiz{% endblock %}
+{% block content %}
+{% set pct = (100 * attempt.score / attempt.total) | round | int if attempt.total else 0 %}
+<section class="card result">
+  <p class="muted">{{ attempt.quiz_title }}</p>
+  <div class="score {{ 'good' if pct >= 60 else 'bad' }}">{{ attempt.score }} / {{ attempt.total }}</div>
+  <p>{{ pct }}% · finished in {{ attempt.duration_seconds }} s · graded by pod <code>{{ attempt.served_by }}</code></p>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('quiz.leaderboard', quiz_id=attempt.quiz_id) }}">Leaderboard</a>
+    <a class="link" href="{{ url_for('quiz.index') }}">All quizzes</a>
+  </div>
+</section>
+
+<h2>Review</h2>
+{% for r in review %}
+<div class="card review {{ 'right' if r.correct else 'wrong' }}">
+  <p><strong>{{ loop.index }}.</strong> {{ r.text }}</p>
+  <ul>
+    {% for opt in r.options %}
+    <li class="{% if loop.index0 == r.correct_index %}is-correct{% elif loop.index0 == r.chosen %}is-chosen{% endif %}">
+      {{ opt }}
+      {% if loop.index0 == r.correct_index %}<span class="tag">correct</span>{% endif %}
+      {% if loop.index0 == r.chosen and not r.correct %}<span class="tag">your answer</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if r.chosen is none %}<p class="muted">Not answered</p>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}

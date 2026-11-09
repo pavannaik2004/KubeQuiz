@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard · {{ quiz.title }}{% endblock %}
+{% block content %}
+<h1>Leaderboard: {{ quiz.title }}</h1>
+<div class="card">
+  <table class="table">
+    <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Time</th><th>When (UTC)</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.username }}</td>
+        <td>{{ r.score }} / {{ r.total }}</td>
+        <td>{{ r.duration_seconds }} s</td>
+        <td class="muted">{{ r.submitted_at }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No attempts yet. Be the first!</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p><a class="link" href="{{ url_for('quiz.index') }}">← All quizzes</a></p>
+{% endblock %}

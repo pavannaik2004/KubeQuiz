@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Admin · KubeQuiz{% endblock %}
+{% block content %}
+<div class="quiz-head">
+  <h1>Admin</h1>
+  <form method="post" action="{{ url_for('admin.logout') }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="link">Log out</button>
+  </form>
+</div>
+
+<section class="stats">
+  <div class="card stat"><span>{{ stats.quizzes }}</span>quizzes</div>
+  <div class="card stat"><span>{{ stats.questions }}</span>questions</div>
+  <div class="card stat"><span>{{ stats.attempts }}</span>attempts</div>
+</section>
+
+<div class="card">
+  <table class="table">
+    <thead><tr><th>Title</th><th>Questions</th><th>Time limit</th><th></th></tr></thead>
+    <tbody>
+      {% for q in quizzes %}
+      <tr>
+        <td>{{ q.title }}</td>
+        <td>{{ q.question_count }}</td>
+        <td>{{ q.time_limit_seconds }} s</td>
+        <td class="right"><a class="link" href="{{ url_for('admin.edit_quiz', quiz_id=q.id) }}">Edit</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No quizzes yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<form class="card" method="post" action="{{ url_for('admin.create_quiz') }}">
+  <h2>New quiz</h2>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label for="title">Title</label>
+  <input id="title" name="title" required maxlength="120">
+  <label for="description">Description</label>
+  <input id="description" name="description" maxlength="300">
+  <label for="time_limit_seconds">Time limit (seconds)</label>
+  <input id="time_limit_seconds" name="time_limit_seconds" type="number" min="30" max="7200" value="300" required>
+  <button class="btn">Create quiz</button>
+</form>
+{% endblock %}
