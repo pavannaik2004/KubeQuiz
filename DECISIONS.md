@@ -73,9 +73,9 @@ Status: Active.
 Status: Active (revised 2026-11-09: min was 2; may be tuned in M5).
 
 ### D-012 | 2026-11-09 | Build
-**Images are built straight into minikube's Docker daemon (`minikube docker-env`) with `imagePullPolicy: IfNotPresent`. CI separately pushes to GHCR.**
-*Why:* Needs no registry or credentials locally, and the local loop is faster.
-Status: Active.
+**Images are built with the host's Docker (Docker Desktop), then copied into the cluster with `minikube image load --overwrite=true`. `imagePullPolicy: IfNotPresent`. CI separately pushes to GHCR.**
+*Why:* Needs no registry or credentials locally, and the host's build cache is reused.
+Status: Active (revised 2026-11-09). The original plan was `minikube docker-env`, but minikube v1.39 defaults to the **containerd** runtime, where docker-env is experimental; the live run failed with `failed to inspect pulled image moby/buildkit ... 404`. Build-then-load works on any runtime.
 
 ### D-013 | 2026-11-09 | Service
 **A NodePort Service, reached through `kubectl port-forward` from WSL so it is available on Windows at localhost.**
@@ -122,7 +122,7 @@ Status: Active.
 
 ### D-022 | 2026-11-09 | Deploy
 **The image tag stays fixed (`kubequiz:1.0.0`). The deploy role stamps the pod template with the annotation `kubequiz/image-id: <docker image ID>`, so a changed build triggers a rolling update and an unchanged build changes nothing.**
-*Why:* Builds go straight into minikube without a registry, so retagging every build isn't needed. Docker's layer cache gives a stable image ID, which keeps the playbook idempotent.
+*Why:* Builds reach minikube without a registry, so retagging every build isn't needed. Docker's layer cache gives a stable image ID (the host's ID), which keeps the playbook idempotent. The image is loaded into minikube only when the ID changed or the cluster lacks it.
 Status: Active.
 
 ### D-023 | 2026-11-09 | Deploy
@@ -168,6 +168,16 @@ Status: Active.
 **The pod CPU request was raised from 100m to 200m, keeping the 50% HPA target. The default demo load went from 300 to 200 simulated users.**
 *Why (measured):* a docker-compose run with 100 Locust users gave **94.7 req/s at about 340m CPU (about 3.6m per request)** with 0 failures. At 100m/50%, one pod saturates at about 14 req/s, so even 50 users would ask for 4 pods and 300 users for about 20, pinning the demo at the 10-pod cap. At 200m/50% it is about 1 pod per 30 users: 200 users gives about 7 pods, showing replicas tracking the load. Capacity check: 10 × 200m = 2 cores, which fits in minikube's 4 CPUs after the control plane (~0.85), monitoring (~0.22) and Locust (~0.45) requests.
 Status: Active (re-check against the live minikube numbers in M5).
+
+### D-033 | 2026-11-09 | Monitoring / network resilience
+**kube-prometheus-stack is installed from the OCI registry `oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack` (same version, 93.1.0) instead of the classic Helm repo. Network downloads (minikube, kubectl, helm, chart) have `timeout: 60` plus `until`/`retries`.**
+*Why:* During the first live runs, GitHub release-asset downloads were flaky on this network: a TLS handshake timeout on the minikube checksum, then a connection reset and **4× 504 Gateway Timeout** on the chart tarball, while ghcr.io OCI pulls worked immediately. The classic repo's tarballs are GitHub release assets; OCI avoids them and also drops the `helm repo add` step.
+Status: Active.
+
+### D-034 | 2026-11-09 | Idempotency (found in live runs)
+**(a) Images are built with `--provenance=false --sbom=false`. (b) The build role loads the image into minikube only when the host image ID differs from the `kubequiz/image-id` annotation on the running Deployment, or the tag is missing from minikube. (c) Helm values are passed inline (`values: lookup(values.yaml) | from_yaml | combine(...)`) instead of `values_files`.**
+*Why:* Live re-runs of `site.yml` reported changed=3. (a) Docker 29/BuildKit attaches provenance attestations with a timestamp, so every cached rebuild got a **new image ID** (measured: 3 builds gave 3 IDs; with the flags, 3 builds gave 1 ID), which re-loaded the image and rolled the pods on every run. (b) Comparing against the deployed ID also covers the image being rebuilt outside Ansible. (c) With `values_files`, kubernetes.core.helm cannot detect "no change" without the helm-diff plugin, so it upgraded on every run. Result: two consecutive runs report **changed=0**.
+Status: Active.
 
 ### D-029 | 2026-11-09 | Deploy
 **Ansible applies the plain files in `k8s/` (`kubernetes.core.k8s src:`), except the Secret, which it builds from group_vars. `k8s/secret.example.yaml` is only for manual `kubectl` use.**

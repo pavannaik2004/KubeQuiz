@@ -22,19 +22,44 @@
     - "{{ local_bin }}"
     - "{{ tools_dir }}"
 
+# Each versioned binary is checksum-verified when it is first downloaded
+# (get_url writes to a temp file and only moves it into place on success).
+# Skip the download entirely when it already exists: with a checksum URL,
+# get_url would otherwise re-fetch the checksum on every run, so a re-run
+# would need the network (D-033).
+- name: Check which tool versions are already installed
+  ansible.builtin.stat:
+    path: "{{ tools_dir }}/{{ item }}"
+  loop:
+    - "minikube-{{ minikube_version }}"
+    - "kubectl-{{ kubectl_version }}"
+  register: prereqs_installed
+
 - name: Download minikube {{ minikube_version }}
+  when: not prereqs_installed.results[0].stat.exists
   ansible.builtin.get_url:
     url: "https://github.com/kubernetes/minikube/releases/download/{{ minikube_version }}/minikube-linux-{{ prereqs_arch }}"
     checksum: "sha256:https://github.com/kubernetes/minikube/releases/download/{{ minikube_version }}/minikube-linux-{{ prereqs_arch }}.sha256"
     dest: "{{ tools_dir }}/minikube-{{ minikube_version }}"
     mode: "0755"
+    timeout: 60
+  register: prereqs_minikube_dl
+  until: prereqs_minikube_dl is succeeded
+  retries: 5
+  delay: 5
 
 - name: Download kubectl {{ kubectl_version }}
+  when: not prereqs_installed.results[1].stat.exists
   ansible.builtin.get_url:
     url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/{{ prereqs_arch }}/kubectl"
     checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/{{ prereqs_arch }}/kubectl.sha256"
     dest: "{{ tools_dir }}/kubectl-{{ kubectl_version }}"
     mode: "0755"
+    timeout: 60
+  register: prereqs_kubectl_dl
+  until: prereqs_kubectl_dl is succeeded
+  retries: 5
+  delay: 5
 
 - name: Create helm version directory
   ansible.builtin.file:
@@ -49,6 +74,10 @@
     remote_src: true
     extra_opts: ["--strip-components=1"]
     creates: "{{ tools_dir }}/helm-{{ helm_version }}/helm"
+  register: prereqs_helm_dl
+  until: prereqs_helm_dl is succeeded
+  retries: 5
+  delay: 5
 
 - name: Link tools into {{ local_bin }}
   ansible.builtin.file:

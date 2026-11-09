@@ -1,21 +1,42 @@
 ---
-# Build the app image straight into minikube's Docker daemon, so no registry
-# is needed (D-012). Docker's layer cache makes an unchanged build produce the
-# same image ID, which is how we report "changed" honestly.
+# Build the app image with the host's Docker (Docker Desktop) and load it into
+# minikube, so no registry is needed (D-012). minikube v1.39 uses containerd,
+# where `minikube docker-env` is unsupported, hence build-then-load.
+#
+# Idempotency (D-034): the image ID is stable across cached rebuilds (no
+# provenance/SBOM attestations). The image is (re)loaded into minikube only
+# when the ID differs from the one the running Deployment was stamped with,
+# or the cluster does not have the tag at all.
 
-- name: Build the app image inside minikube as {{ app_image }}
+- name: Read the image ID the running Deployment was built from
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    namespace: "{{ app_namespace }}"
+    name: quiz-app
+  register: build_current_deploy
+
+- name: Build the app image and load it into minikube as {{ app_image }}
   ansible.builtin.shell: |
     set -euo pipefail
-    eval "$(minikube -p {{ minikube_profile }} docker-env --shell bash)"
-    before="$(docker images -q --no-trunc {{ app_image }})"
-    docker build --quiet \
+    # No provenance/SBOM attestations: they embed a build timestamp, which
+    # gives a new image ID on every build and breaks idempotency.
+    docker build --quiet --provenance=false --sbom=false \
       --build-arg APP_VERSION={{ app_version }} \
       -t {{ app_image }} {{ repo_dir }}/app >/dev/null
-    after="$(docker images -q --no-trunc {{ app_image }})"
-    echo "IMAGE_ID=${after}"
-    if [ "$before" != "$after" ]; then echo "CHANGED"; fi
+    id="$(docker images -q --no-trunc {{ app_image }})"
+    echo "IMAGE_ID=${id}"
+    if [ "$id" != "{{ build_deployed_id }}" ] || \
+       ! minikube -p {{ minikube_profile }} image ls | grep -Fxq "docker.io/library/{{ app_image }}"; then
+      minikube -p {{ minikube_profile }} image load --overwrite=true {{ app_image }}
+      echo "CHANGED"
+    fi
   args:
     executable: /bin/bash
+  vars:
+    build_deployed_id: >-
+      {{ (build_current_deploy.resources | first | default({}))
+         .get('spec', {}).get('template', {}).get('metadata', {})
+         .get('annotations', {}).get('kubequiz/image-id', 'none') }}
   register: build_result
   changed_when: "'CHANGED' in build_result.stdout_lines"
 

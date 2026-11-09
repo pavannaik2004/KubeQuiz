@@ -41,9 +41,11 @@ grafana:
       enabled: true
       label: grafana_dashboard
       searchNamespace: ALL
+  # Grafana 13 was OOMKilled at a 256Mi limit during start-up (live run,
+  # 2026-11-09), so give it real headroom.
   resources:
-    requests: {cpu: 50m, memory: 128Mi}
-    limits: {memory: 256Mi}
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 512Mi}
   grafana.ini:
     dashboards:
       default_home_dashboard_path: /tmp/dashboards/kubequiz.json

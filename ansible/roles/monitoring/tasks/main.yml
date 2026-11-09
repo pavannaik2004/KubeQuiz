@@ -2,26 +2,27 @@
 # Prometheus + Grafana via the kube-prometheus-stack Helm chart, a
 # ServiceMonitor for the app and the KubeQuiz Grafana dashboard.
 
-- name: Add prometheus-community Helm repo
-  kubernetes.core.helm_repository:
-    name: prometheus-community
-    repo_url: https://prometheus-community.github.io/helm-charts
-
+# The chart is pulled from the OCI registry on ghcr.io rather than the classic
+# Helm repo, whose tarballs are GitHub release assets (they returned 504 /
+# connection resets during the first live run, see D-033).
 - name: Install kube-prometheus-stack {{ kps_chart_version }}
   kubernetes.core.helm:
     name: "{{ monitoring_release }}"
-    chart_ref: prometheus-community/kube-prometheus-stack
+    chart_ref: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
     chart_version: "{{ kps_chart_version }}"
     release_namespace: "{{ monitoring_namespace }}"
     create_namespace: true
-    update_repo_cache: true
-    values_files:
-      - "{{ repo_dir }}/monitoring/values.yaml"
-    values:
-      grafana:
-        adminPassword: "{{ grafana_admin_password }}"
+    # Passed inline (not values_files): with values_files the module cannot
+    # tell "no change" without the helm-diff plugin and upgrades every run.
+    values: >-
+      {{ lookup('ansible.builtin.file', repo_dir + '/monitoring/values.yaml') | from_yaml
+         | combine({'grafana': {'adminPassword': grafana_admin_password}}, recursive=true) }}
     wait: true
-    wait_timeout: 10m
+    timeout: 10m
+  register: monitoring_helm
+  until: monitoring_helm is succeeded
+  retries: 4
+  delay: 10
 
 # Rendered through a template (YAML block scalar) on purpose: passing JSON
 # text through a plain "{{ }}" value makes Ansible turn it into a dict.

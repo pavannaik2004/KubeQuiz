@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** All code written: M7 CI and M8 README done. The live-cluster verification of M3 to M6 is **still blocked on the user** running the WSL bootstrap. The CI e2e job will also verify the manifests once the repo is pushed to GitHub.
-- **Last updated:** 2026-11-09 10:20 +05:30
+- **Last updated:** 2026-11-09 11:37 +05:30 (the phase line below is superseded by the 11:37 log entry: everything is deployed live and idempotent; the next step is the M5 scaling demo)
 - **Next up:** (1) The user runs `bash scripts/wsl-bootstrap.sh` in WSL. (2) Run `site.yml` twice (deploy, then the idempotency check). (3) Run `scale-demo.yml` and tune the HPA/CPU if scaling is weak. (4) The user creates a GitHub repo and pushes, and CI goes green. (5) Screenshots for the report.
 
 ## Milestones
@@ -91,3 +91,16 @@ Newest entries go at the bottom. Format: `### YYYY-MM-DD HH:MM | <milestone> | <
 - docker compose + Locust: 100 users for 60 s gave **5646 requests, 0 failures, 94.7 req/s, median 6 ms, avg 12 ms**. Container CPU sampled with `docker stats`: steady average **~34% of a core (~340m)**, so about **3.6m CPU per request**.
 - Conclusion: at 100m/50%, 300 users would want about 20 pods and pin at the max of 10. Changed (D-032): pod CPU request **200m**, demo default **200 users** (expect about 7 pods). Updated `k8s/deployment.yaml`, `hpa.yaml` comment, `locust/demo-settings.yaml`, `group_vars`, the dashboard panel title, README, PRD N3 and success criteria (baseline 3, not 2), and D-011.
 - Still to confirm on live minikube (M5).
+
+### 2026-11-09 11:37 | M3 / M4 / M6 / M7 | LIVE: bootstrap, GitHub + CI green, site.yml green and idempotent
+- With the user's approval, ran `scripts/wsl-bootstrap.sh` in WSL: uv, ansible-core 2.18.20 and kubernetes.core 6.6.0 installed.
+- With the user's approval, created a **private** GitHub repo via gh: https://github.com/pavannaik2004/KubeQuiz (the user did not specify public or private, so I chose private as the reversible option). Pushed `main`.
+- **CI run 42564326187: all 4 jobs succeeded.** e2e on kind: seeded 3 quizzes; `/api/info` answered by **3 distinct pods**; Locust 593 requests, Job completed (0 failures); **200 attempts** in the shared DB; image published to GHCR.
+- **Live `site.yml` needed 6 attempts. Fixes:**
+  1. GitHub release downloads were flaky (TLS handshake timeout, connection reset, repeated **504**). Added `timeout: 60` + retries; skip downloads when the versioned binary already exists; install the chart from **OCI `oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack`** (D-033).
+  2. minikube v1.39 defaults to **containerd**, so `minikube docker-env` failed (`moby/buildkit ... 404`). Now the image is built with Docker Desktop and copied in with `minikube image load` (D-012 revised).
+  3. **Grafana OOMKilled** at a 256Mi limit; raised to 512Mi (request 256Mi) in `monitoring/values.yaml`.
+- Then the idempotency check reported changed=3. Fixed (D-034): `--provenance=false --sbom=false` (the image ID was changing on every build), load only when the deployed annotation ID differs, Helm values inline instead of `values_files`.
+- **Verified: two consecutive `site.yml` runs gave `ok=36 changed=0 failed=0`.** Cluster: quiz-app 3/3 Running, HPA `cpu: 0%/50%` (metrics-server OK), Prometheus/Grafana/operator/kube-state-metrics Running.
+- Bumped the GitHub Actions to Node-24 majors (checkout/setup-python v7, buildx/login v4, metadata v6, build-push v7) after Node 20 deprecation warnings.
+- Note: during debugging the image was rebuilt outside Ansible, so the image content in minikube is from an earlier build of the **same code**. The behaviour is identical; the next code change will load and roll normally.
