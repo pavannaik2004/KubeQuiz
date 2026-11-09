@@ -1,0 +1,35 @@
+# Local development without Kubernetes.
+#   docker compose up --build            -> app on http://localhost:8080
+#   docker compose --profile load up     -> also Locust UI on http://localhost:8089
+services:
+  app:
+    build:
+      context: ./app
+      args:
+        APP_VERSION: dev
+    image: kubequiz:dev
+    ports:
+      - "8080:8080"
+    environment:
+      SECRET_KEY: compose-dev-secret
+      ADMIN_PASSWORD: admin
+      AUTO_SEED: "true"
+      DB_PATH: /data/quiz.db
+    volumes:
+      - quiz-data:/data
+    restart: unless-stopped
+
+  locust:
+    image: locustio/locust:2.31.8
+    profiles: ["load"]
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./loadtest:/mnt/locust:ro
+    command: -f /mnt/locust/locustfile.py --host http://app:8080
+
+volumes:
+  quiz-data:

@@ -89,3 +89,23 @@ Status: Active.
 ### D-015 | 2026-11-09 | Docs
 **Location of the project docs: `docs/PRD.md`, `CONTEXT.md` (progress log) and `DECISIONS.md` (this file).**
 Status: Active.
+
+### D-016 | 2026-11-09 | Docker
+**Multi-stage image (a build stage creates a venv; the runtime stage copies only the venv and the code). It runs as fixed UID/GID 10001, and the HEALTHCHECK uses python's urllib because curl is not in the slim image.**
+*Why:* A smaller image without build tooling, and the fixed UID lets the K8s `securityContext`/`fsGroup` give the pod write access to the PVC.
+Status: Active.
+
+### D-017 | 2026-11-09 | Repo
+**`.gitattributes` forces LF line endings (except `.bat`/`.ps1`).**
+*Why:* The repo is edited on Windows but its scripts run in WSL, containers and CI, where CRLF line endings break bash and shebang lines.
+Status: Active.
+
+### D-018 | 2026-11-09 | Load test
+**Locust is pinned to `locustio/locust:2.31.8`. The simulated user mix: browse 1, take quiz 4 (open, answer randomly, submit, sometimes the leaderboard), /api/info 1; wait 1-3 s between tasks.**
+*Why:* Taking quizzes dominates, as it would in a real exam. The pinned version makes runs reproducible.
+Status: Active.
+
+### D-019 | 2026-11-09 | Compose
+**docker-compose runs a single app replica. Locust sits behind the `load` profile, so it starts only when asked.**
+*Why:* Compose is only for local development. Replicas and scaling are demonstrated on Kubernetes.
+Status: Active.

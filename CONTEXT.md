@@ -4,16 +4,16 @@
 > Related docs: [docs/PRD.md](docs/PRD.md) (what we are building) · [DECISIONS.md](DECISIONS.md) (decisions Claude made on the user's behalf)
 
 ## Current status
-- **Phase:** M1 done, M2 next
-- **Last updated:** 2026-11-09 09:45 +05:30
-- **Next up:** M2: Dockerfile (python:3.12-slim, non-root, gunicorn gthread) and docker-compose (app + Locust), plus `loadtest/locustfile.py`. Docker Desktop must be running.
+- **Phase:** M2 done, M3 next
+- **Last updated:** 2026-11-09 09:46 +05:30
+- **Next up:** M3: Kubernetes manifests in `k8s/` (namespace, configmap, secret, pvc, db-init job, deployment, service, hpa, locust). Needs minikube installed in WSL Ubuntu; the Docker VM has about 8 GB, so size minikube at about 4-5 GB.
 
 ## Milestones
 | # | Milestone | Status |
 |---|-----------|--------|
 | M0 | Plan, repo init, PRD / CONTEXT / DECISIONS | Done |
 | M1 | Flask app + tests passing locally | Done |
-| M2 | Dockerfile + docker-compose | Not started |
+| M2 | Dockerfile + docker-compose | Done |
 | M3 | Kubernetes manifests on minikube | Not started |
 | M4 | Ansible automation (site / teardown / scale-demo) | Not started |
 | M5 | HPA + Locust in-cluster, scaling demonstrated | Not started |
@@ -56,3 +56,12 @@ Newest entries go at the bottom. Format: `### YYYY-MM-DD HH:MM | <milestone> | <
 - **Bug fixed:** the CSRF check passed when the session had no token, because an empty value matched the empty default. Requests are now rejected when no session token exists.
 - Verified: `pytest` 22 passed; `flake8` clean; seed run twice (second run skipped; DB in WAL mode; 3 quizzes / 18 questions).
 - Dev venv at `app/.venv` (gitignored).
+
+### 2026-11-09 09:46 | M2 | Docker image, compose and Locust
+- `.gitattributes` (LF line endings, D-017).
+- `app/gunicorn.conf.py`: gthread, 1 worker × 4 threads, 20 s graceful timeout for SIGTERM.
+- `app/Dockerfile`: multi-stage python:3.12-slim, UID 10001, `/data` volume, urllib HEALTHCHECK (D-016). `app/.dockerignore`.
+- `loadtest/locustfile.py`: `QuizTaker` user. It logs in with a random bot name, takes random quizzes with random answers, and sometimes opens the leaderboard (D-018).
+- `docker-compose.yml`: app (AUTO_SEED, named volume) plus Locust under the `load` profile (D-019).
+- Verified: the image `kubequiz:dev` builds at 206 MB; the container reports **healthy**; `/api/stats` shows 3 quizzes / 18 questions; `id` shows uid=10001. A headless Locust run of 30 users for 30 s made **882 requests with 0 failures**, median 4 ms, p95 28 ms.
+- Environment: Docker Desktop 29.8.0 is running; its VM has 12 CPUs and about 8 GB RAM.
