@@ -161,6 +161,22 @@ kubectl -n kubequiz delete --wait=false \
 kubectl -n kubequiz get pods -w
 ```
 
+### Measured results (live minikube, 2026-11-09)
+
+200 simulated students for 5 minutes (`scale-demo.yml`), minikube with 4 CPUs, pods requesting 200m CPU, HPA target 50%:
+
+| | Run 1: keep-alive connections | Run 2: reconnect per quiz attempt |
+|---|---|---|
+| Replicas | 3 → 6 → 3 | 3 → **7** → 3 |
+| Pods that actually served traffic | **3 of 6** | **7 of 7** |
+| Requests / failures | 52,362 / 0 | 53,310 / **0** |
+| Throughput | 174.7 req/s | 177.9 req/s |
+| Median / p95 / p99 / max latency | 8 / 78 / 1100 / 3200 ms | 10 / 97 / **470** / **1754** ms |
+
+Timelines (replicas and CPU sampled every 20 s with `scripts/record-scaling.sh`) are in [`docs/results/`](docs/results/). Run 2 is textbook HPA behaviour: CPU spikes to **129%**, the HPA goes **3 → 7 within ~20 s**, average CPU then **settles at exactly the 50% target** for the rest of the load, and when the load ends it scales in **7 → 6 → 3** (limited to 50% per 30 s after the 60 s stabilization window).
+
+**Lesson from run 1:** the HPA scaled out correctly (CPU hit 91%), but the new pods received **no traffic**. A Kubernetes Service balances per TCP *connection*, and every simulated student had opened a keep-alive connection to one of the original 3 pods before the scale-out. Average CPU sat at about 54% only because 3 pods ran at ~108% while 3 sat idle. Making each student reconnect at the start of a quiz attempt, as a browser does after being idle, spread the load over all 7 pods and more than halved the tail latency. In production the same problem is solved with shorter keep-alive timeouts or L7 (ingress/service-mesh) load balancing. See [D-035](DECISIONS.md).
+
 ## 4. Tear down
 
 ```bash

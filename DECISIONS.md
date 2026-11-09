@@ -179,6 +179,11 @@ Status: Active.
 *Why:* Live re-runs of `site.yml` reported changed=3. (a) Docker 29/BuildKit attaches provenance attestations with a timestamp, so every cached rebuild got a **new image ID** (measured: 3 builds gave 3 IDs; with the flags, 3 builds gave 1 ID), which re-loaded the image and rolled the pods on every run. (b) Comparing against the deployed ID also covers the image being rebuilt outside Ansible. (c) With `values_files`, kubernetes.core.helm cannot detect "no change" without the helm-diff plugin, so it upgraded on every run. Result: two consecutive runs report **changed=0**.
 Status: Active.
 
+### D-035 | 2026-11-09 | Load test realism (found in the live demo)
+**Each simulated student drops its pooled HTTP connection (`self.client.close()`) at the start of every quiz attempt, keeping its cookies. `scale-demo.yml` now reports quiz submissions per pod for the run.**
+*Why:* In the first live demo the HPA scaled 3→6 correctly (CPU 91%), but Prometheus showed **only the 3 original pods served any requests** (~21k, 29k, 21k); the 3 new pods served 0, and average CPU sat at about 54% (3 pods at ~108% plus 3 idle). The cause: a Kubernetes Service (kube-proxy, L4) balances per TCP connection, and Locust's keep-alive sessions, all opened in the first 20 s, stayed pinned to the original pods. Reconnecting per attempt mimics a browser after idle time and lets new pods receive traffic. Real-world equivalents are short keep-alive timeouts, L7 ingress/mesh balancing, or `maxRequestsPerConnection`. Evidence: `docs/results/run1-keepalive-pinned.csv`.
+Status: Active.
+
 ### D-029 | 2026-11-09 | Deploy
 **Ansible applies the plain files in `k8s/` (`kubernetes.core.k8s src:`), except the Secret, which it builds from group_vars. `k8s/secret.example.yaml` is only for manual `kubectl` use.**
 *Why:* `k8s/` stays usable with plain `kubectl apply`, and no real secret values live there.

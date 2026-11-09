@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** All code written: M7 CI and M8 README done. The live-cluster verification of M3 to M6 is **still blocked on the user** running the WSL bootstrap. The CI e2e job will also verify the manifests once the repo is pushed to GitHub.
-- **Last updated:** 2026-11-09 11:37 +05:30 (the phase line below is superseded by the 11:37 log entry: everything is deployed live and idempotent; the next step is the M5 scaling demo)
+- **Last updated:** 2026-11-09 11:57 +05:30. **All milestones M0 to M8 are done and verified live.** The phase/next-up lines below are historical; see the 11:57 log entry. The only thing left is report screenshots, which the user takes in a browser.
 - **Next up:** (1) The user runs `bash scripts/wsl-bootstrap.sh` in WSL. (2) Run `site.yml` twice (deploy, then the idempotency check). (3) Run `scale-demo.yml` and tune the HPA/CPU if scaling is weak. (4) The user creates a GitHub repo and pushes, and CI goes green. (5) Screenshots for the report.
 
 ## Milestones
@@ -104,3 +104,11 @@ Newest entries go at the bottom. Format: `### YYYY-MM-DD HH:MM | <milestone> | <
 - **Verified: two consecutive `site.yml` runs gave `ok=36 changed=0 failed=0`.** Cluster: quiz-app 3/3 Running, HPA `cpu: 0%/50%` (metrics-server OK), Prometheus/Grafana/operator/kube-state-metrics Running.
 - Bumped the GitHub Actions to Node-24 majors (checkout/setup-python v7, buildx/login v4, metadata v6, build-push v7) after Node 20 deprecation warnings.
 - Note: during debugging the image was rebuilt outside Ansible, so the image content in minikube is from an earlier build of the **same code**. The behaviour is identical; the next code change will load and roll normally.
+
+### 2026-11-09 11:57 | M5 | LIVE scaling demo: done (two runs), keep-alive finding fixed
+- CI run 42571166261 (with the live-run fixes and the bumped actions): **all 4 jobs succeeded**.
+- **Run 1** (`scale-demo.yml`, 200 users, 5 min): HPA 3→6→3, 52,362 requests, 0 failures, 174.7 req/s, p99 1.1 s. **But** Prometheus `sum by (pod)(increase(flask_http_request_total[25m]))` showed only the 3 original pods served traffic (21,441 / 28,691 / 21,568); the 3 new pods served 0. Cause: Locust keep-alive connections pinned to the original pods, because a Service balances per TCP connection. Timeline: `docs/results/run1-keepalive-pinned.csv` (CPU 91% → 6 pods, then stuck at ~54% average).
+- Fix (D-035): `self.client.close()` at the start of each quiz attempt in `loadtest/locustfile.py`. `scale-demo.yml` now notes the max attempt ID first and prints **submissions per pod** for the run, prints only the aggregate Locust lines, and the CPU message formatting is fixed.
+- **Run 2:** HPA **3→7→3** (prediction from D-032 was about 7). **All 7 pods served** (3,775 / 3,765 / 3,672 on the original pods; 1,969 / 1,909 / 1,908 / 1,827 on the new ones). 53,310 requests, **0 failures**, 177.9 req/s, median 10 ms, p95 97 ms, **p99 470 ms** (was 1100), max 1754 ms (was 3200). Timeline `docs/results/run2-reconnect-balanced.csv`: CPU 129% → 7 pods within ~20 s, then **steady at exactly 50%**, then scale-in 7→6→3.
+- Added `scripts/record-scaling.sh` (HPA timeline as CSV) and a README "Measured results" section.
+- **Remaining:** screenshots for the report (app with pod footer, Grafana during scale-out, Locust UI, `kubectl get hpa -w`, Ansible recap). These need a browser, so the user takes them with `bash scripts/port-forward.sh`.

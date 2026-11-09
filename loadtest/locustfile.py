@@ -45,6 +45,15 @@ class QuizTaker(HttpUser):
             if not self.quiz_ids:
                 return
         quiz_id = random.choice(self.quiz_ids)
+
+        # A Kubernetes Service balances per TCP *connection*. With keep-alive,
+        # every simulated student stays pinned to the pod it first reached, so
+        # pods added by the HPA would get no traffic (measured in the first
+        # live demo: 6 replicas, only 3 served requests). Drop the pooled
+        # connection at the start of each attempt, like a browser that went
+        # idle; the session cookie (login) is kept.
+        self.client.close()
+
         page = self.client.get(f"/quiz/{quiz_id}", name="/quiz/[id]")
         if page.status_code != 200:
             return

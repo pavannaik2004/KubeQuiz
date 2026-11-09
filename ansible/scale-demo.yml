@@ -22,6 +22,13 @@
         name: quiz-app
       register: hpa_before
 
+    - name: Note the newest quiz attempt before the load starts
+      ansible.builtin.command: >-
+        kubectl -n {{ app_namespace }} exec deploy/quiz-app -- python -c
+        "import sqlite3; print(sqlite3.connect('/data/quiz.db').execute('select coalesce(max(id),0) from attempts').fetchone()[0])"
+      register: demo_first_attempt
+      changed_when: false
+
     - name: Remove a previous load-test Job
       kubernetes.core.k8s:
         kind: Job
@@ -67,10 +74,12 @@
         msg:
           - "Replicas before: {{ hpa_before.resources[0].status.currentReplicas | default('?') }}"
           - "Replicas now:    {{ hpa.resources[0].status.currentReplicas }} (desired {{ hpa.resources[0].status.desiredReplicas }})"
-          - "CPU utilisation: {{ hpa_cpu }}% (target 50%)"
+          - "CPU utilisation: {{ hpa_cpu }} (target 50%)"
       vars:
         hpa_metrics: "{{ hpa.resources[0].status.currentMetrics | default([], true) }}"
-        hpa_cpu: "{{ hpa_metrics[0].resource.current.averageUtilization if hpa_metrics else '?' }}"
+        hpa_cpu: >-
+          {{ (hpa_metrics[0].resource.current.averageUtilization | string) + '%'
+             if hpa_metrics else 'n/a (HPA recomputing right after scaling)' }}
 
     - name: Wait for the load test to finish
       kubernetes.core.k8s_info:
@@ -83,13 +92,27 @@
 
     - name: Fetch the Locust summary
       ansible.builtin.command: >-
-        kubectl -n {{ app_namespace }} logs job/locust-headless --tail=40
+        kubectl -n {{ app_namespace }} logs job/locust-headless
       register: locust_summary
       changed_when: false
 
-    - name: Locust summary
+    - name: Locust totals (requests, failures, latency, req/s)
       ansible.builtin.debug:
-        var: locust_summary.stdout_lines
+        msg: "{{ locust_summary.stdout_lines | select('search', 'Aggregated|Type +Name') | map('regex_replace', ' +', ' ') | list }}"
+
+    # Proves the load was spread over the new pods, not only the original ones.
+    - name: Count quiz submissions graded by each pod during this run
+      ansible.builtin.command: >-
+        kubectl -n {{ app_namespace }} exec deploy/quiz-app -- python -c
+        "import sqlite3; c=sqlite3.connect('/data/quiz.db');
+        [print(p, n) for p, n in c.execute('select served_by, count(*) from attempts where id > ? group by served_by order by 2 desc',
+        ({{ demo_first_attempt.stdout | int }},))]"
+      register: demo_per_pod
+      changed_when: false
+
+    - name: Submissions per pod
+      ansible.builtin.debug:
+        msg: "{{ demo_per_pod.stdout_lines }} ({{ demo_per_pod.stdout_lines | length }} pods served this run)"
 
     - name: Wait for the HPA to scale back in (takes a couple of minutes)
       kubernetes.core.k8s_info:
