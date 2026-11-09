@@ -155,6 +155,15 @@ Status: Active.
 *Why:* The Docker Desktop VM has about 8 GB in total, and Docker needs headroom. With monitoring (~1.2 GB), up to 10 app pods (256Mi limits) and Locust, this fits. If memory gets tight, use `enable_monitoring=false`.
 Status: Active.
 
+### D-030 | 2026-11-09 | CI
+**GitHub Actions runs four jobs: `test` (flake8 + pytest), `infra-lint` (kubeconform strict, Ansible syntax-check + ansible-lint, shellcheck, dashboard JSON), `e2e` (builds the image, creates a kind cluster, runs `scripts/e2e-smoke.sh`) and `publish` (GHCR push on `main` only, tags `1.0.0`, `sha-<short>` and `latest`, using `GITHUB_TOKEN`).**
+*Why:* The e2e job deploys the real manifests on a real cluster in every run, including a Locust run that must have zero failures. CI uses kind rather than minikube because it starts faster on runners; the manifests are the same. GHCR needs no extra secrets.
+Status: Active.
+
+### D-031 | 2026-11-09 | Testing
+**The e2e smoke test is one script (`scripts/e2e-smoke.sh`), used by CI and runnable by hand on any fresh cluster.** It applies the plain `k8s/` files with kubectl, not Ansible, so it tests the manifests independently of the automation.
+Status: Active.
+
 ### D-029 | 2026-11-09 | Deploy
 **Ansible applies the plain files in `k8s/` (`kubernetes.core.k8s src:`), except the Secret, which it builds from group_vars. `k8s/secret.example.yaml` is only for manual `kubectl` use.**
 *Why:* `k8s/` stays usable with plain `kubectl apply`, and no real secret values live there.

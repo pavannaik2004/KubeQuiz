@@ -4,9 +4,9 @@
 > Related docs: [docs/PRD.md](docs/PRD.md) (what we are building) · [DECISIONS.md](DECISIONS.md) (decisions Claude made on the user's behalf)
 
 ## Current status
-- **Phase:** M3/M4/M6 written and checked offline. **Blocked on the user:** the WSL bootstrap must be run (or approved) before anything can be deployed to minikube.
-- **Last updated:** 2026-11-09 10:07 +05:30
-- **Next up:** the user runs `bash scripts/wsl-bootstrap.sh` in WSL. Then `bash scripts/run-playbook.sh site.yml` (first live run), a second run to check idempotency, then `scale-demo.yml` (M5) with tuning, then M7 CI and M8 README.
+- **Phase:** All code written: M7 CI and M8 README done. The live-cluster verification of M3 to M6 is **still blocked on the user** running the WSL bootstrap. The CI e2e job will also verify the manifests once the repo is pushed to GitHub.
+- **Last updated:** 2026-11-09 10:13 +05:30
+- **Next up:** (1) The user runs `bash scripts/wsl-bootstrap.sh` in WSL. (2) Run `site.yml` twice (deploy, then the idempotency check). (3) Run `scale-demo.yml` and tune the HPA/CPU if scaling is weak. (4) The user creates a GitHub repo and pushes, and CI goes green. (5) Screenshots for the report.
 
 ## Milestones
 | # | Milestone | Status |
@@ -18,8 +18,8 @@
 | M4 | Ansible automation (site / teardown / scale-demo) | Written + syntax/lint clean; not yet run |
 | M5 | HPA + Locust in-cluster, scaling demonstrated | Manifests/playbook written; not yet run |
 | M6 | Prometheus + Grafana dashboard | Written; not yet run |
-| M7 | GitHub Actions CI | Not started |
-| M8 | README, demo guide, report material | Not started |
+| M7 | GitHub Actions CI | Written + actionlint clean; not yet run on GitHub |
+| M8 | README, demo guide, report material | README done; screenshots pending a live run |
 
 ## Environment facts
 - Windows 11 host. Docker Desktop is installed (with bundled kubectl). It was **stopped** at the 2026-11-09 check.
@@ -77,3 +77,11 @@ Newest entries go at the bottom. Format: `### YYYY-MM-DD HH:MM | <milestone> | <
 - **Verified offline:** kubeconform strict (schemas downloaded on the host because containers can't reach raw.githubusercontent.com): 13/13 valid, ServiceMonitor skipped (CRD). `ansible-playbook --syntax-check` passes for all 3 playbooks. `ansible-lint`: clean. shellcheck: clean. Dashboard JSON parses.
 - **Mistake fixed:** a PowerShell bulk-replace flattened arrays and replaced every `-` with a space in `roles/loadtest/tasks/{main,locustfile}.yml`. Both files were rewritten in full, then re-linted clean.
 - Decisions D-011 (revised) and D-020 to D-029 recorded.
+
+### 2026-11-09 10:13 | M7 / M8 | CI pipeline, e2e smoke test, README
+- Checked first: the WSL bootstrap had **still not been run** (uv, Ansible, minikube and Helm all missing), so I did the unblocked milestones.
+- `.github/workflows/ci.yml`: jobs test, infra-lint, e2e (kind), publish (GHCR, main only) (D-030).
+- `scripts/e2e-smoke.sh`: applies `k8s/` with kubectl, then checks the db-init Job, 3 ready replicas, in-cluster curl through the Service (readyz, stats, home page, metrics, 40× `/api/info` must reach ≥2 distinct pods), a 30 s / 20-user Locust Job with 0 failures, and attempts counted in the shared DB (D-031).
+- `README.md`: requirement mapping, mermaid architecture, features, layout, compose quick start, the WSL + Ansible deploy, what each role does, the scaling demo script, teardown, testing/CI, design notes, troubleshooting, limitations, screenshot checklist.
+- Verified: actionlint clean (after quoting `${APP_VERSION}`), shellcheck clean, pytest still 22 passed.
+- **Blocked:** a local run of the e2e script on a temporary kind cluster was **denied by the auto-mode classifier** ("Code from External": downloading and running `kind.exe`). It was not worked around. The e2e script has therefore **not been executed yet**; it will run in CI on push, or locally if the user approves kind.
