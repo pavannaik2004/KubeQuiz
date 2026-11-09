@@ -4,9 +4,9 @@
 > Related docs: [docs/PRD.md](docs/PRD.md) (what we are building) · [DECISIONS.md](DECISIONS.md) (decisions Claude made on the user's behalf)
 
 ## Current status
-- **Phase:** M2 done, M3 next
-- **Last updated:** 2026-11-09 09:46 +05:30
-- **Next up:** M3: Kubernetes manifests in `k8s/` (namespace, configmap, secret, pvc, db-init job, deployment, service, hpa, locust). Needs minikube installed in WSL Ubuntu; the Docker VM has about 8 GB, so size minikube at about 4-5 GB.
+- **Phase:** M3/M4/M6 written and checked offline. **Blocked on the user:** the WSL bootstrap must be run (or approved) before anything can be deployed to minikube.
+- **Last updated:** 2026-11-09 10:07 +05:30
+- **Next up:** the user runs `bash scripts/wsl-bootstrap.sh` in WSL. Then `bash scripts/run-playbook.sh site.yml` (first live run), a second run to check idempotency, then `scale-demo.yml` (M5) with tuning, then M7 CI and M8 README.
 
 ## Milestones
 | # | Milestone | Status |
@@ -14,10 +14,10 @@
 | M0 | Plan, repo init, PRD / CONTEXT / DECISIONS | Done |
 | M1 | Flask app + tests passing locally | Done |
 | M2 | Dockerfile + docker-compose | Done |
-| M3 | Kubernetes manifests on minikube | Not started |
-| M4 | Ansible automation (site / teardown / scale-demo) | Not started |
-| M5 | HPA + Locust in-cluster, scaling demonstrated | Not started |
-| M6 | Prometheus + Grafana dashboard | Not started |
+| M3 | Kubernetes manifests on minikube | Written + schema-valid; not yet applied |
+| M4 | Ansible automation (site / teardown / scale-demo) | Written + syntax/lint clean; not yet run |
+| M5 | HPA + Locust in-cluster, scaling demonstrated | Manifests/playbook written; not yet run |
+| M6 | Prometheus + Grafana dashboard | Written; not yet run |
 | M7 | GitHub Actions CI | Not started |
 | M8 | README, demo guide, report material | Not started |
 
@@ -65,3 +65,15 @@ Newest entries go at the bottom. Format: `### YYYY-MM-DD HH:MM | <milestone> | <
 - `docker-compose.yml`: app (AUTO_SEED, named volume) plus Locust under the `load` profile (D-019).
 - Verified: the image `kubequiz:dev` builds at 206 MB; the container reports **healthy**; `/api/stats` shows 3 quizzes / 18 questions; `id` shows uid=10001. A headless Locust run of 30 users for 30 s made **882 requests with 0 failures**, median 4 ms, p95 28 ms.
 - Environment: Docker Desktop 29.8.0 is running; its VM has 12 CPUs and about 8 GB RAM.
+
+### 2026-11-09 10:07 | M3 / M4 / M6 | K8s manifests, Ansible, monitoring (offline-verified)
+- **WSL findings:** Ubuntu 26.04 with Python 3.14 but **no pip or ensurepip**. `sudo` needs a password. docker and kubectl (Docker Desktop's) work. minikube, Helm and Ansible are missing. As a result, all installs go to user space (D-020, D-021).
+- **Blocked:** running `scripts/wsl-bootstrap.sh` was **denied by the Claude Code auto-mode safety classifier** ("Unauthorized Persistence"; the script appended to `~/.bashrc` and used a curl-to-sh installer). The `~/.bashrc` edit has been removed from the script, which now only prints a PATH tip. **The user needs to run the bootstrap themselves or approve it.**
+- `k8s/`: namespace, configmap, secret.example, pvc, db-init-job, deployment (no replicas field; probes; non-root; read-only root FS; preStop), service (NodePort 30080), hpa (3..10 @50%), `monitoring/servicemonitor.yaml`, `locust/locust.yaml` (master + 2 workers), `locust/headless-job.yaml` + `locust/demo-settings.yaml`.
+- `ansible/`: `ansible.cfg`, `inventory.ini` (localhost), `requirements.yml` (kubernetes.core ≥6.6), `group_vars/all.yml`, `site.yml`, `teardown.yml`, `scale-demo.yml`; roles prereqs, cluster, build, deploy, monitoring (+ dashboard ConfigMap template), loadtest (+ shared `locustfile.yml`).
+- `monitoring/values.yaml` (slim kube-prometheus-stack) and `monitoring/dashboard-kubequiz.json` (9 panels: replicas, req/s, HPA CPU, submissions/min, 5xx, replicas over time, CPU per pod, req/s per pod, p50/p95).
+- `scripts/`: `wsl-bootstrap.sh`, `run-playbook.sh` (sets ANSIBLE_CONFIG because `/mnt/d` is world-writable), `port-forward.sh`, `watch-scaling.sh`.
+- Tool versions checked live and pinned (D-027): minikube v1.39.0, K8s v1.37.0, Helm v3.22.1, chart 93.1.0, ansible-core 2.18.20, kubernetes py 37.0.2.
+- **Verified offline:** kubeconform strict (schemas downloaded on the host because containers can't reach raw.githubusercontent.com): 13/13 valid, ServiceMonitor skipped (CRD). `ansible-playbook --syntax-check` passes for all 3 playbooks. `ansible-lint`: clean. shellcheck: clean. Dashboard JSON parses.
+- **Mistake fixed:** a PowerShell bulk-replace flattened arrays and replaced every `-` with a space in `roles/loadtest/tasks/{main,locustfile}.yml`. Both files were rewritten in full, then re-linted clean.
+- Decisions D-011 (revised) and D-020 to D-029 recorded.

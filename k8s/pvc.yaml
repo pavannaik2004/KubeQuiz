@@ -1,0 +1,16 @@
+# One volume shared by every replica (SQLite file). minikube is a single
+# node, so a ReadWriteOnce hostPath volume can be mounted by all pods.
+# See DECISIONS.md D-002.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: quiz-data
+  namespace: kubequiz
+  labels:
+    app.kubernetes.io/name: kubequiz
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,54 @@
+---
+# Start (or reuse) the minikube cluster and make sure metrics-server, which
+# feeds the HorizontalPodAutoscaler, is running.
+
+- name: Read minikube status
+  ansible.builtin.command: minikube status -p {{ minikube_profile }} -o json
+  register: cluster_status
+  changed_when: false
+  failed_when: false
+
+- name: Decide whether the cluster is already up
+  ansible.builtin.set_fact:
+    cluster_running: >-
+      {{ cluster_status.rc == 0 and
+         (cluster_status.stdout | from_json).get('APIServer') == 'Running' }}
+
+- name: Start minikube with Kubernetes {{ kubernetes_version }}
+  ansible.builtin.command: >-
+    minikube start
+    -p {{ minikube_profile }}
+    --driver={{ minikube_driver }}
+    --cpus={{ minikube_cpus }}
+    --memory={{ minikube_memory_mb }}
+    --kubernetes-version={{ kubernetes_version }}
+    --addons=metrics-server
+    --wait=all
+  when: not cluster_running
+  changed_when: true
+
+- name: List minikube addons
+  ansible.builtin.command: minikube addons list -p {{ minikube_profile }} -o json
+  register: cluster_addons
+  changed_when: false
+
+- name: Enable metrics-server addon
+  ansible.builtin.command: minikube addons enable metrics-server -p {{ minikube_profile }}
+  when: (cluster_addons.stdout | from_json)['metrics-server']['Status'] != 'enabled'
+  changed_when: true
+
+- name: Wait for the node to be Ready
+  kubernetes.core.k8s_info:
+    kind: Node
+    wait: true
+    wait_condition: {type: Ready, status: "True"}
+    wait_timeout: 300
+
+- name: Wait for metrics-server to be available
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    namespace: kube-system
+    name: metrics-server
+    wait: true
+    wait_condition: {type: Available, status: "True"}
+    wait_timeout: 300

@@ -1,0 +1,46 @@
+# Creates the schema and loads the sample quizzes exactly once, before the
+# app pods start (so replicas never race to seed). Safe to re-run.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: quiz-db-init
+  namespace: kubequiz
+  labels:
+    app.kubernetes.io/name: kubequiz
+    app.kubernetes.io/component: db-init
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubequiz
+        app.kubernetes.io/component: db-init
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: seed
+          image: kubequiz:1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "kubequiz.seed"]
+          envFrom:
+            - configMapRef:
+                name: quiz-config
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: quiz-data

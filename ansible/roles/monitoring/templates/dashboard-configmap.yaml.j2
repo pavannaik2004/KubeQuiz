@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubequiz-dashboard
+  namespace: {{ monitoring_namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  kubequiz.json: |
+    {{ lookup('ansible.builtin.file', repo_dir + '/monitoring/dashboard-kubequiz.json') | indent(4) }}

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quiz-config
+  namespace: kubequiz
+  labels:
+    app.kubernetes.io/name: kubequiz
+data:
+  DB_PATH: /data/quiz.db
+  QUIZ_TIME_LIMIT: "300"
+  QUIZ_TIME_GRACE: "10"
+  GUNICORN_THREADS: "4"
+  LOG_LEVEL: info
+  METRICS_ENABLED: "true"

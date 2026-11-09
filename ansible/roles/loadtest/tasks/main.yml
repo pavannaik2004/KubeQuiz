@@ -1,0 +1,35 @@
+---
+# Locust master (web UI) + workers inside the cluster. The locustfile is read
+# from loadtest/locustfile.py so there is a single copy of it (D-024).
+
+- name: Locustfile ConfigMap
+  ansible.builtin.include_tasks: locustfile.yml
+
+- name: Locust master, service and workers
+  kubernetes.core.k8s:
+    src: "{{ k8s_dir }}/locust/locust.yaml"
+    apply: true
+
+# Pods only read the ConfigMap at start-up, so restart them if the script changed.
+- name: Restart Locust when the locustfile changed
+  kubernetes.core.k8s:
+    state: patched
+    kind: Deployment
+    namespace: "{{ app_namespace }}"
+    name: "{{ item }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubequiz/locustfile-sha: "{{ lookup('ansible.builtin.file', repo_dir + '/loadtest/locustfile.py') | hash('sha1') }}"
+  loop: [locust-master, locust-worker]
+
+- name: Wait for Locust master
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    namespace: "{{ app_namespace }}"
+    name: locust-master
+    wait: true
+    wait_condition: {type: Available, status: "True"}
+    wait_timeout: 300

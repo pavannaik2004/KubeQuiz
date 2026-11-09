@@ -1,0 +1,14 @@
+---
+# Shared by the loadtest role and scale-demo.yml.
+- name: Locustfile ConfigMap from loadtest/locustfile.py
+  kubernetes.core.k8s:
+    apply: true
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: locustfile
+        namespace: "{{ app_namespace }}"
+        labels: {app.kubernetes.io/name: locust}
+      data:
+        locustfile.py: "{{ lookup('ansible.builtin.file', repo_dir + '/loadtest/locustfile.py') }}"

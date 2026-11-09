@@ -1,0 +1,36 @@
+---
+# Prometheus + Grafana via the kube-prometheus-stack Helm chart, a
+# ServiceMonitor for the app and the KubeQuiz Grafana dashboard.
+
+- name: Add prometheus-community Helm repo
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: https://prometheus-community.github.io/helm-charts
+
+- name: Install kube-prometheus-stack {{ kps_chart_version }}
+  kubernetes.core.helm:
+    name: "{{ monitoring_release }}"
+    chart_ref: prometheus-community/kube-prometheus-stack
+    chart_version: "{{ kps_chart_version }}"
+    release_namespace: "{{ monitoring_namespace }}"
+    create_namespace: true
+    update_repo_cache: true
+    values_files:
+      - "{{ repo_dir }}/monitoring/values.yaml"
+    values:
+      grafana:
+        adminPassword: "{{ grafana_admin_password }}"
+    wait: true
+    wait_timeout: 10m
+
+# Rendered through a template (YAML block scalar) on purpose: passing JSON
+# text through a plain "{{ }}" value makes Ansible turn it into a dict.
+- name: KubeQuiz Grafana dashboard (picked up by the Grafana sidecar)
+  kubernetes.core.k8s:
+    apply: true
+    template: dashboard-configmap.yaml.j2
+
+- name: ServiceMonitor for quiz-app
+  kubernetes.core.k8s:
+    src: "{{ k8s_dir }}/monitoring/servicemonitor.yaml"
+    apply: true

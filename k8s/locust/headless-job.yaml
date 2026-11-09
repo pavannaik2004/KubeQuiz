@@ -1,0 +1,34 @@
+# One-shot, unattended load test: ramps simulated students up, holds, then
+# exits. The numbers come from the "locust-demo" ConfigMap as LOCUST_*
+# environment variables, so this file never changes (ansible/scale-demo.yml
+# just rewrites the ConfigMap).
+# Manual:  kubectl apply -f k8s/locust/demo-settings.yaml -f k8s/locust/headless-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: locust-headless
+  namespace: kubequiz
+  labels: {app.kubernetes.io/name: locust, app.kubernetes.io/component: headless}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: locust, app.kubernetes.io/component: headless}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: locust
+          image: locustio/locust:2.31.8
+          args: ["-f", "/mnt/locust/locustfile.py", "--headless", "--only-summary"]
+          envFrom:
+            - configMapRef:
+                name: locust-demo
+          resources:
+            requests: {cpu: 200m, memory: 128Mi}
+            limits: {cpu: "1500m", memory: 512Mi}
+          volumeMounts:
+            - {name: locustfile, mountPath: /mnt/locust}
+      volumes:
+        - name: locustfile
+          configMap: {name: locustfile}

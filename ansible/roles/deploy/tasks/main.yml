@@ -1,0 +1,108 @@
+---
+# Apply the manifests in k8s/ in dependency order and wait until the app is
+# actually serving. Every step is declarative, so re-runs report "ok".
+
+- name: Namespace
+  kubernetes.core.k8s:
+    src: "{{ k8s_dir }}/namespace.yaml"
+    apply: true
+
+- name: Secret (from group_vars, never stored in k8s/)
+  kubernetes.core.k8s:
+    apply: true
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: quiz-secret
+        namespace: "{{ app_namespace }}"
+        labels: {app.kubernetes.io/name: kubequiz}
+      type: Opaque
+      stringData:
+        SECRET_KEY: "{{ flask_secret_key }}"
+        ADMIN_PASSWORD: "{{ admin_password }}"
+  no_log: true
+
+- name: ConfigMap and PersistentVolumeClaim
+  kubernetes.core.k8s:
+    src: "{{ k8s_dir }}/{{ item }}"
+    apply: true
+  loop:
+    - configmap.yaml
+    - pvc.yaml
+
+# Job pod templates are immutable and the seed only has to happen once per
+# volume, so the Job is created only if it does not exist yet (D-023).
+- name: Look for an existing db-init Job
+  kubernetes.core.k8s_info:
+    kind: Job
+    namespace: "{{ app_namespace }}"
+    name: quiz-db-init
+  register: deploy_db_init_job
+
+- name: Create db-init Job (schema + sample quizzes)
+  kubernetes.core.k8s:
+    src: "{{ k8s_dir }}/db-init-job.yaml"
+    state: present
+  when: deploy_db_init_job.resources | length == 0
+
+- name: Wait for db-init Job to complete
+  kubernetes.core.k8s_info:
+    kind: Job
+    namespace: "{{ app_namespace }}"
+    name: quiz-db-init
+    wait: true
+    wait_condition: {type: Complete, status: "True"}
+    wait_timeout: 240
+
+- name: Deployment, Service and HorizontalPodAutoscaler
+  kubernetes.core.k8s:
+    src: "{{ k8s_dir }}/{{ item }}"
+    apply: true
+  loop:
+    - deployment.yaml
+    - service.yaml
+    - hpa.yaml
+
+# The tag stays the same (kubequiz:1.0.0) across rebuilds, so stamp the pod
+# template with the image ID: a new build changes the annotation, which makes
+# Kubernetes do a rolling update. Same build -> no change (D-022).
+- name: Roll pods when the image content changed
+  kubernetes.core.k8s:
+    state: patched
+    kind: Deployment
+    namespace: "{{ app_namespace }}"
+    name: quiz-app
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubequiz/image-id: "{{ build_image_id | default('unknown') }}"
+
+- name: Wait for the rollout to finish
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    namespace: "{{ app_namespace }}"
+    name: quiz-app
+    wait: true
+    wait_condition: {type: Available, status: "True"}
+    wait_timeout: 300
+  register: deploy_app
+
+- name: Wait until the HPA has brought replicas up to its minimum
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    namespace: "{{ app_namespace }}"
+    name: quiz-app
+  register: deploy_app
+  until: (deploy_app.resources[0].status.readyReplicas | default(0)) >= 3
+  retries: 30
+  delay: 5
+
+- name: Summary
+  ansible.builtin.debug:
+    msg: >-
+      quiz-app ready replicas:
+      {{ deploy_app.resources[0].status.readyReplicas | default(0) }}
+      (image {{ app_image }}, id {{ (build_image_id | default('?'))[7:19] }})

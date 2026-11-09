@@ -1,0 +1,106 @@
+---
+# The "extension" demo: simulate many students and watch the HPA add pods.
+#   bash scripts/run-playbook.sh scale-demo.yml
+#   bash scripts/run-playbook.sh scale-demo.yml -e demo_users=500 -e demo_duration=8m
+# Tip: run  bash scripts/watch-scaling.sh  in a second terminal while it runs.
+- name: Horizontal scaling demo with simulated users
+  hosts: local
+  gather_facts: true
+  environment:
+    PATH: "{{ local_bin }}:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Make sure the locustfile ConfigMap is current
+      ansible.builtin.include_role:
+        name: loadtest
+        tasks_from: locustfile.yml
+
+    - name: Baseline replica count
+      kubernetes.core.k8s_info:
+        kind: HorizontalPodAutoscaler
+        namespace: "{{ app_namespace }}"
+        name: quiz-app
+      register: hpa_before
+
+    - name: Remove a previous load-test Job
+      kubernetes.core.k8s:
+        kind: Job
+        namespace: "{{ app_namespace }}"
+        name: locust-headless
+        state: absent
+        delete_options: {propagationPolicy: Foreground}
+        wait: true
+
+    - name: Set the number of simulated users to {{ demo_users }}
+      kubernetes.core.k8s:
+        apply: true
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: locust-demo
+            namespace: "{{ app_namespace }}"
+            labels: {app.kubernetes.io/name: locust}
+          data:
+            LOCUST_HOST: "http://quiz-app.{{ app_namespace }}.svc.cluster.local"
+            LOCUST_USERS: "{{ demo_users | string }}"
+            LOCUST_SPAWN_RATE: "{{ demo_spawn_rate | string }}"
+            LOCUST_RUN_TIME: "{{ demo_duration }}"
+
+    - name: Start the simulated students
+      kubernetes.core.k8s:
+        src: "{{ k8s_dir }}/locust/headless-job.yaml"
+        state: present
+
+    - name: Wait for the HPA to scale out to at least {{ demo_expect_replicas }}
+      kubernetes.core.k8s_info:
+        kind: HorizontalPodAutoscaler
+        namespace: "{{ app_namespace }}"
+        name: quiz-app
+      register: hpa
+      until: (hpa.resources[0].status.currentReplicas | default(0)) >= demo_expect_replicas | int
+      retries: 40
+      delay: 15
+
+    - name: Scaled out
+      ansible.builtin.debug:
+        msg:
+          - "Replicas before: {{ hpa_before.resources[0].status.currentReplicas | default('?') }}"
+          - "Replicas now:    {{ hpa.resources[0].status.currentReplicas }} (desired {{ hpa.resources[0].status.desiredReplicas }})"
+          - "CPU utilisation: {{ hpa_cpu }}% (target 50%)"
+      vars:
+        hpa_metrics: "{{ hpa.resources[0].status.currentMetrics | default([], true) }}"
+        hpa_cpu: "{{ hpa_metrics[0].resource.current.averageUtilization if hpa_metrics else '?' }}"
+
+    - name: Wait for the load test to finish
+      kubernetes.core.k8s_info:
+        kind: Job
+        namespace: "{{ app_namespace }}"
+        name: locust-headless
+        wait: true
+        wait_condition: {type: Complete, status: "True"}
+        wait_timeout: 1200
+
+    - name: Fetch the Locust summary
+      ansible.builtin.command: >-
+        kubectl -n {{ app_namespace }} logs job/locust-headless --tail=40
+      register: locust_summary
+      changed_when: false
+
+    - name: Locust summary
+      ansible.builtin.debug:
+        var: locust_summary.stdout_lines
+
+    - name: Wait for the HPA to scale back in (takes a couple of minutes)
+      kubernetes.core.k8s_info:
+        kind: HorizontalPodAutoscaler
+        namespace: "{{ app_namespace }}"
+        name: quiz-app
+      register: hpa_after
+      until: hpa_after.resources[0].status.currentReplicas == hpa_after.resources[0].spec.minReplicas
+      retries: 40
+      delay: 15
+
+    - name: Back to baseline
+      ansible.builtin.debug:
+        msg: "Replicas back to {{ hpa_after.resources[0].status.currentReplicas }}"

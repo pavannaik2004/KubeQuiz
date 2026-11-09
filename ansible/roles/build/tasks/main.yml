@@ -1,0 +1,24 @@
+---
+# Build the app image straight into minikube's Docker daemon, so no registry
+# is needed (D-012). Docker's layer cache makes an unchanged build produce the
+# same image ID, which is how we report "changed" honestly.
+
+- name: Build the app image inside minikube as {{ app_image }}
+  ansible.builtin.shell: |
+    set -euo pipefail
+    eval "$(minikube -p {{ minikube_profile }} docker-env --shell bash)"
+    before="$(docker images -q --no-trunc {{ app_image }})"
+    docker build --quiet \
+      --build-arg APP_VERSION={{ app_version }} \
+      -t {{ app_image }} {{ repo_dir }}/app >/dev/null
+    after="$(docker images -q --no-trunc {{ app_image }})"
+    echo "IMAGE_ID=${after}"
+    if [ "$before" != "$after" ]; then echo "CHANGED"; fi
+  args:
+    executable: /bin/bash
+  register: build_result
+  changed_when: "'CHANGED' in build_result.stdout_lines"
+
+- name: Remember the image ID (used to roll pods when the image changes)
+  ansible.builtin.set_fact:
+    build_image_id: "{{ build_result.stdout_lines | select('match', '^IMAGE_ID=') | first | regex_replace('^IMAGE_ID=', '') }}"

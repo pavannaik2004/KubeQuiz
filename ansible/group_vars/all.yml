@@ -1,0 +1,44 @@
+---
+# ---- paths -------------------------------------------------------------------
+repo_dir: "{{ playbook_dir | dirname }}"
+k8s_dir: "{{ repo_dir }}/k8s"
+local_bin: "{{ ansible_env.HOME }}/.local/bin"
+tools_dir: "{{ ansible_env.HOME }}/.local/share/kubequiz-tools"
+
+# ---- tool versions (pinned for reproducible runs, D-027) -----------------------
+minikube_version: v1.39.0
+kubectl_version: v1.37.0
+helm_version: v3.22.1            # Helm 3 line: kubernetes.core.helm targets Helm 3
+kubernetes_version: v1.37.0      # minikube v1.39.0 default
+
+# ---- minikube --------------------------------------------------------------------
+# The Docker Desktop VM has ~8 GB; leave room for Docker itself (D-028).
+minikube_profile: minikube
+minikube_driver: docker
+minikube_cpus: 4
+minikube_memory_mb: 4600
+
+# ---- application -------------------------------------------------------------
+app_namespace: kubequiz
+app_version: "1.0.0"
+app_image: "kubequiz:{{ app_version }}"   # must match k8s/deployment.yaml & db-init-job.yaml
+
+# Secrets: fine for a local demo. For anything real, move these into an
+# encrypted file:  ansible-vault encrypt_string 'value' --name 'admin_password'
+admin_password: admin123
+flask_secret_key: kubequiz-demo-secret-change-me-0f3a9c
+
+# ---- optional components -------------------------------------------------------
+enable_monitoring: true
+enable_loadtest: true
+
+monitoring_namespace: monitoring
+monitoring_release: monitoring
+kps_chart_version: "93.1.0"          # prometheus-community/kube-prometheus-stack
+grafana_admin_password: admin
+
+# ---- scale demo (scale-demo.yml) -------------------------------------------------
+demo_users: 300
+demo_spawn_rate: 10
+demo_duration: 5m
+demo_expect_replicas: 5               # playbook waits until the HPA reaches this

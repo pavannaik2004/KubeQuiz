@@ -1,0 +1,12 @@
+# Load profile for the headless Job (Locust reads LOCUST_* env vars).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locust-demo
+  namespace: kubequiz
+  labels: {app.kubernetes.io/name: locust}
+data:
+  LOCUST_HOST: http://quiz-app.kubequiz.svc.cluster.local
+  LOCUST_USERS: "300"
+  LOCUST_SPAWN_RATE: "10"
+  LOCUST_RUN_TIME: 5m

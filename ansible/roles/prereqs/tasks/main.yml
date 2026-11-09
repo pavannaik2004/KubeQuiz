@@ -1,0 +1,75 @@
+---
+# Install minikube, kubectl and helm into ~/.local/bin without sudo (D-020).
+# Each binary is downloaded to a versioned file and symlinked, so changing a
+# version in group_vars installs the new one and re-runs are no-ops.
+
+- name: Map CPU architecture to release naming
+  ansible.builtin.set_fact:
+    prereqs_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}"
+
+- name: Docker must be reachable (Docker Desktop + WSL integration)
+  ansible.builtin.command: docker info --format '{{ "{{" }}.ServerVersion{{ "}}" }}'
+  register: prereqs_docker_info
+  changed_when: false
+  failed_when: prereqs_docker_info.rc != 0
+
+- name: Create tool directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ local_bin }}"
+    - "{{ tools_dir }}"
+
+- name: Download minikube {{ minikube_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/kubernetes/minikube/releases/download/{{ minikube_version }}/minikube-linux-{{ prereqs_arch }}"
+    checksum: "sha256:https://github.com/kubernetes/minikube/releases/download/{{ minikube_version }}/minikube-linux-{{ prereqs_arch }}.sha256"
+    dest: "{{ tools_dir }}/minikube-{{ minikube_version }}"
+    mode: "0755"
+
+- name: Download kubectl {{ kubectl_version }}
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/{{ prereqs_arch }}/kubectl"
+    checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/{{ prereqs_arch }}/kubectl.sha256"
+    dest: "{{ tools_dir }}/kubectl-{{ kubectl_version }}"
+    mode: "0755"
+
+- name: Create helm version directory
+  ansible.builtin.file:
+    path: "{{ tools_dir }}/helm-{{ helm_version }}"
+    state: directory
+    mode: "0755"
+
+- name: Download and unpack helm {{ helm_version }}
+  ansible.builtin.unarchive:
+    src: "https://get.helm.sh/helm-{{ helm_version }}-linux-{{ prereqs_arch }}.tar.gz"
+    dest: "{{ tools_dir }}/helm-{{ helm_version }}"
+    remote_src: true
+    extra_opts: ["--strip-components=1"]
+    creates: "{{ tools_dir }}/helm-{{ helm_version }}/helm"
+
+- name: Link tools into {{ local_bin }}
+  ansible.builtin.file:
+    src: "{{ item.src }}"
+    dest: "{{ local_bin }}/{{ item.name }}"
+    state: link
+    force: true
+  loop:
+    - {name: minikube, src: "{{ tools_dir }}/minikube-{{ minikube_version }}"}
+    - {name: kubectl, src: "{{ tools_dir }}/kubectl-{{ kubectl_version }}"}
+    - {name: helm, src: "{{ tools_dir }}/helm-{{ helm_version }}/helm"}
+
+- name: Report tool versions
+  ansible.builtin.command: "{{ item }}"
+  loop:
+    - minikube version --short
+    - kubectl version --client
+    - helm version --short
+  register: prereqs_tool_versions
+  changed_when: false
+
+- name: Tool versions
+  ansible.builtin.debug:
+    msg: "{{ prereqs_tool_versions.results | map(attribute='stdout') | list }}"

@@ -1,0 +1,59 @@
+# Slimmed-down kube-prometheus-stack for a laptop minikube (D-026).
+# Only what the KubeQuiz dashboard needs: Prometheus, Grafana,
+# kube-state-metrics (HPA/Deployment replica counts) and kubelet/cAdvisor
+# (container CPU).
+
+alertmanager:
+  enabled: false
+
+nodeExporter:
+  enabled: false          # host mounts do not work well under minikube's docker driver
+prometheus-node-exporter:
+  enabled: false
+
+# Control-plane components are not reachable in minikube; skip them so the
+# Prometheus targets page stays green.
+kubeEtcd: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeProxy: {enabled: false}
+
+defaultRules:
+  create: false
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    retention: 1d
+    # Pick up ServiceMonitors in every namespace, not just ones with the
+    # Helm release label (our app's lives in "kubequiz").
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 100m, memory: 300Mi}
+      limits: {memory: 800Mi}
+
+grafana:
+  defaultDashboardsEnabled: false   # only load our dashboard
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 256Mi}
+  grafana.ini:
+    dashboards:
+      default_home_dashboard_path: /tmp/dashboards/kubequiz.json
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 128Mi}
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m, memory: 96Mi}
+    limits: {memory: 256Mi}

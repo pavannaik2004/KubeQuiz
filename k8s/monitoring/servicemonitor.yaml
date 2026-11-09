@@ -1,0 +1,20 @@
+# Tells Prometheus (kube-prometheus-stack) to scrape /metrics on every
+# quiz-app pod behind the Service. Requires the monitoring stack's CRDs.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: quiz-app
+  namespace: kubequiz
+  labels:
+    app.kubernetes.io/name: kubequiz
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubequiz
+      app.kubernetes.io/component: web
+  namespaceSelector:
+    matchNames: ["kubequiz"]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

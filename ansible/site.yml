@@ -1,0 +1,37 @@
+---
+# Full deployment of KubeQuiz on a local minikube cluster.
+#   bash scripts/run-playbook.sh site.yml
+#   bash scripts/run-playbook.sh site.yml --tags deploy     # only (re)deploy the app
+#   bash scripts/run-playbook.sh site.yml -e enable_monitoring=false
+- name: Deploy KubeQuiz to minikube
+  hosts: local
+  gather_facts: true
+  environment:
+    PATH: "{{ local_bin }}:{{ ansible_env.PATH }}"
+
+  roles:
+    - role: prereqs
+      tags: [prereqs]
+    - role: cluster
+      tags: [cluster]
+    - role: build
+      tags: [build, deploy]
+    - role: deploy
+      tags: [deploy]
+    - role: monitoring
+      tags: [monitoring]
+      when: enable_monitoring | bool
+    - role: loadtest
+      tags: [loadtest]
+      when: enable_loadtest | bool
+
+  post_tasks:
+    - name: Show how to reach everything
+      ansible.builtin.debug:
+        msg:
+          - "Deployment finished. Open the tunnels with:  bash scripts/port-forward.sh"
+          - "App:     http://localhost:8080   (admin password: {{ admin_password }})"
+          - "Locust:  http://localhost:8089{{ '' if enable_loadtest | bool else '  (disabled)' }}"
+          - "Grafana: http://localhost:3000   (admin / {{ grafana_admin_password }}){{ '' if enable_monitoring | bool else '  (disabled)' }}"
+          - "Watch scaling:  bash scripts/watch-scaling.sh"
+      tags: [always]

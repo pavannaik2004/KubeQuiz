@@ -1,0 +1,37 @@
+---
+# Remove KubeQuiz from the cluster.
+#   bash scripts/run-playbook.sh teardown.yml                          # app + monitoring
+#   bash scripts/run-playbook.sh teardown.yml -e destroy_cluster=true  # also delete minikube
+- name: Tear down KubeQuiz
+  hosts: local
+  gather_facts: true
+  environment:
+    PATH: "{{ local_bin }}:{{ ansible_env.PATH }}"
+  vars:
+    destroy_cluster: false
+
+  tasks:
+    - name: Uninstall kube-prometheus-stack
+      kubernetes.core.helm:
+        name: "{{ monitoring_release }}"
+        release_namespace: "{{ monitoring_namespace }}"
+        state: absent
+        wait: true
+      when: not destroy_cluster | bool
+
+    - name: Delete namespaces (this also deletes the PVC and its data)
+      kubernetes.core.k8s:
+        kind: Namespace
+        name: "{{ item }}"
+        state: absent
+        wait: true
+        wait_timeout: 300
+      loop:
+        - "{{ app_namespace }}"
+        - "{{ monitoring_namespace }}"
+      when: not destroy_cluster | bool
+
+    - name: Delete the whole minikube cluster
+      ansible.builtin.command: minikube delete -p {{ minikube_profile }}
+      when: destroy_cluster | bool
+      changed_when: true
